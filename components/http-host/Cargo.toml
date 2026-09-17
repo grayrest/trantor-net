@@ -1,0 +1,28 @@
+[package]
+name = "http-host"
+version = "0.0.0"
+edition = "2021"
+publish = false
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+trantor-abi = "0.0.0"      # generated; the consumer's workspace patches it
+sync-io-core = { path = "../sync-io-core" }
+# sigprocmask, sigpending and sigtimedwait, to keep a request's write from
+# raising SIGPIPE on Linux.
+libc = "=0.2.189"
+# The blocking HTTP client (H1/H2). Chunked decode is built in; gzip/brotli
+# decompress transparently. TLS rides the default-on `tls` feature (H12).
+ureq = { version = "=3.4.0", default-features = false, features = ["gzip", "brotli"] }
+# Only pulled with `tls`: full Mozilla root certs (as DERs, so they combine
+# additively with TRANTOR_HTTP_EXTRA_CA, H13) and PEM parsing for the extra CA.
+webpki-root-certs = { version = "1", optional = true }
+rustls-pemfile = { version = "2", optional = true }
+
+[features]
+# TLS on by default (H12): https:// works out of the box. Composing this
+# component with default_features=false (HC0's knob) sheds rustls/ring entirely,
+# leaving a plaintext-only http:// client that rejects https:// with a message.
+default = ["tls"]
+tls = ["ureq/rustls", "dep:webpki-root-certs", "dep:rustls-pemfile"]

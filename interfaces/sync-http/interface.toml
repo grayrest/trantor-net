@@ -1,0 +1,8 @@
+# roc:sync-http/outgoing-handler (P7 prefix). Blocking (P12).
+module = "HttpHost"
+[[hosted]]
+leaf = "send!"
+symbol_stem = "send"
+[[hosted]]
+leaf = "read_body!"
+symbol_stem = "read_body"

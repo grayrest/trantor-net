@@ -1,0 +1,12 @@
+[package]
+name = "sockets-host"
+version = "0.0.0"
+edition = "2021"
+publish = false
+[lib]
+crate-type = ["staticlib", "rlib"]
+[dependencies]
+trantor-abi = "0.0.0"      # generated; the consumer's workspace patches it
+sync-io-core = { path = "../sync-io-core" }
+# poll, for waiting on a socket against a deadline a signal cannot stretch.
+libc = "=0.2.189"

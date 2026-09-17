@@ -1,0 +1,12 @@
+[package]
+name = "eintr-host"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Not a trantor component: package.toml does not list it, so nothing composes
+# it into a world. It runs the socket host's budget code on platforms where
+# trantor cannot yet build an app — Linux, where the EINTR defect lives.
+[dependencies]
+# budget.rs's poll; the tests' sigaction and pthread_kill.
+libc = "=0.2.189"

@@ -1,0 +1,14 @@
+# roc:testnet — TEST-ONLY scaffolding (not in the published baseline). Hosted
+# leaves that start an in-process HTTP server on :9000 serving the basic-cli
+# http-client / http-simple example endpoints, and that interrupt a blocked
+# socket call with a signal.
+module = "TestNet"
+[[hosted]]
+leaf = "start_test_server!"
+symbol_stem = "start_test_server"
+[[hosted]]
+leaf = "interrupt_after!"
+symbol_stem = "interrupt_after"
+[[hosted]]
+leaf = "take_interrupts!"
+symbol_stem = "take_interrupts"

@@ -1,0 +1,57 @@
+# roc:sync-sockets (P7 prefix): tcp (client+listen), udp, network, ip-name-lookup.
+module = "Sockets"
+[[resources]]
+name = "TcpSocket"
+[[resources]]
+name = "UdpSocket"
+[[hosted]]
+leaf = "resolve!"
+symbol_stem = "resolve"
+[[hosted]]
+leaf = "tcp_connect!"
+symbol_stem = "tcp_connect"
+[[hosted]]
+leaf = "tcp_listen!"
+symbol_stem = "tcp_listen"
+[[hosted]]
+leaf = "tcp_accept!"
+symbol_stem = "tcp_accept"
+[[hosted]]
+leaf = "tcp_read!"
+symbol_stem = "tcp_read"
+[[hosted]]
+leaf = "tcp_read_until!"
+symbol_stem = "tcp_read_until"
+[[hosted]]
+leaf = "tcp_read_exactly!"
+symbol_stem = "tcp_read_exactly"
+[[hosted]]
+leaf = "tcp_unread!"
+symbol_stem = "tcp_unread"
+[[hosted]]
+leaf = "tcp_write!"
+symbol_stem = "tcp_write"
+[[hosted]]
+leaf = "tcp_set_read_timeout!"
+symbol_stem = "tcp_set_read_timeout"
+[[hosted]]
+leaf = "tcp_set_write_timeout!"
+symbol_stem = "tcp_set_write_timeout"
+[[hosted]]
+leaf = "tcp_local_port!"
+symbol_stem = "tcp_local_port"
+[[hosted]]
+leaf = "udp_bind!"
+symbol_stem = "udp_bind"
+[[hosted]]
+leaf = "udp_send_to!"
+symbol_stem = "udp_send_to"
+[[hosted]]
+leaf = "udp_set_read_timeout!"
+symbol_stem = "udp_set_read_timeout"
+[[hosted]]
+leaf = "udp_recv!"
+symbol_stem = "udp_recv"
+[[hosted]]
+leaf = "udp_local_port!"
+symbol_stem = "udp_local_port"

@@ -1,0 +1,83 @@
+# trantor-net — sockets and a blocking HTTP client.
+#
+# An ADD-ON over a baseline: it provides no driver, and its own modules import
+# the baseline's `Host`, `IOErr` and `Url`, so it depends on trantor-cli rather
+# than standing alone. A consumer names both:
+#
+#   [deps]
+#   trantor-cli = { path = "../trantor-cli" }
+#   trantor-net = { path = "../trantor-net" }
+#
+# It was in trantor-cli. wasi:cli does bundle sockets, so this is a deliberate
+# divergence rather than fidelity: a CLI baseline that reads files and writes
+# stdout should not oblige every consumer to link rustls and a TLS root store.
+#
+# Two surfaces, matching the baseline's split:
+#   - WASI-derived: Sockets (tcp + udp, as wasi:sockets groups them), HttpHost
+#   - basic-cli shim over them: Tcp, Udp, Http (+ TempTest, test scaffolding)
+[package]
+name = "trantor-net"
+version = "0.1.0"
+exports = [
+	"Sockets",
+	"HttpHost",
+	"Tcp",
+	"Udp",
+	"Http",
+	"TempTest",
+]
+
+[deps]
+trantor-cli = { path = "../trantor-cli" }
+
+[interfaces.sync-sockets]
+[interfaces.sync-http]
+[interfaces.testnet]
+
+[components.sockets-host]
+kind = "host"
+lang = "rust"
+imports = ["sync-io"]
+exports = ["sync-sockets"]
+
+[components.http-host]
+kind = "host"
+lang = "rust"
+exports = ["sync-http"]
+features = ["tls"]
+
+# Linked into apps so their tests can reach a local server, but excluded from a
+# published baseline — `publish` drops test_only archives.
+[components.testnet-host]
+kind = "host"
+lang = "rust"
+exports = ["testnet"]
+test_only = true
+
+# The HTTP test server's Roc face. Test scaffolding, kept out of `exposes`
+# looking like API by living under one clearly-named module.
+[components.temptest]
+kind = "roc"
+exports = ["TempTest"]
+
+[components.net-host]
+kind = "roc"
+exports = ["NetHost"]
+
+[components.net-lib]
+kind = "roc"
+exports = ["Tcp", "Http", "InternalHttp", "Udp"]
+
+[provides]
+sync-sockets = "sockets-host"
+sync-http = "http-host"
+testnet = "testnet-host"
+
+# roc-lang/http, which Http.roc bridges into with `to_http_response!`.
+[packages]
+http = "https://github.com/roc-lang/http/releases/download/1.0.0/6ZUwqYhCS8PU9Mo6MF7oV82ET2o7KYb57CLKDq4cq4sS.tar.zst"
+
+# What `trantor test .` composes this package against: a consumer naming
+# trantor-cli beside trantor-net, which names it too — the diamond, expanded once.
+[dev-deps]
+trantor-cli = { path = "../trantor-cli" }

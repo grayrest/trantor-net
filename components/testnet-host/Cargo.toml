@@ -1,0 +1,11 @@
+[package]
+name = "testnet-host"
+version = "0.0.0"
+edition = "2021"
+publish = false
+[lib]
+crate-type = ["staticlib", "rlib"]
+[dependencies]
+trantor-abi = "0.0.0"      # generated; the consumer's workspace patches it
+# sigaction and pthread_kill, for interrupting a blocked socket call.
+libc = "=0.2.189"
