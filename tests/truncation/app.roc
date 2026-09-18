@@ -59,15 +59,23 @@ sent_verb! = |method| {
 	}
 }
 
-## A request the client itself refuses to send is not a bad response body:
-## here, a body longer than the Content-Length the caller set.
-refused_request! = || {
-	request = Request.from_method(POST).with_uri("http://127.0.0.1:@@BPORT@@/verb").add_header("Content-Length", "1").with_body([104, 101, 108, 108, 111])
+## How a request the client will not send is reported. It is not a bad
+## response body, and says why.
+refusal! = |request| {
 	match Http.send!(request) {
 		Ok(_) => Ok("Ok")
-		Err(HttpErr(Other(_))) => Ok("Other")
+		Err(HttpErr(Other(message))) => Ok("Other(${Str.from_utf8(message) ?? "bad-utf8"})")
 		Err(HttpErr(BadBody)) => Ok("BadBody")
 		Err(_) => Ok("other")
+	}
+}
+
+## The verbs /verb received. A request refused before it is sent must not be
+## among them.
+seen! = || {
+	match Http.get_utf8!(Url.parse("http://127.0.0.1:@@BPORT@@/seen") ? |_| BadUrl) {
+		Ok(s) => Ok(s)
+		Err(_) => Ok("seen-failed")
 	}
 }
 
@@ -90,6 +98,22 @@ main! = |_args| {
 	headers = trickled_headers!()?
 	query = sent_verb!(QUERY)?
 	purge = sent_verb!(Unknown("PURGE"))?
-	refused = refused_request!()?
-	Stdout.line!("${ok} ${lie} ${chunk} ${stall} ${reset} ${gzlie} ${gztrunc} ${headers} ${query} ${purge} ${refused}")
+	Stdout.line!("${ok} ${lie} ${chunk} ${stall} ${reset} ${gzlie} ${gztrunc} ${headers} ${query} ${purge}")?
+	verb = "http://127.0.0.1:@@BPORT@@/verb"
+	refusals = [
+		# `Unknown` shared QUERY's method code, so an empty verb went out as QUERY.
+		Request.from_method(Unknown("")).with_uri(verb),
+		Request.from_method(Unknown("GET /x")).with_uri(verb),
+		Request.from_method(Unknown("GET\r\nX: y")).with_uri(verb),
+		Request.from_method(GET).with_uri(verb).add_header("Host", "a.example").add_header("Host", "b.example"),
+		Request.from_method(GET).with_uri(verb).add_header("Host", "caf\u(e9).example"),
+		Request.from_method(GET).with_uri(verb).add_header("Authorization", "Basic caf\u(e9)"),
+		# Refused while the body is written, after the request line has gone,
+		# so not to /verb.
+		Request.from_method(POST).with_uri("http://127.0.0.1:@@BPORT@@/ok").add_header("Content-Length", "1").with_body([104, 101, 108, 108, 111]),
+	]
+	for request in refusals {
+		Stdout.line!(refusal!(request)?)?
+	}
+	Stdout.line!("seen: ${seen!()?}")
 }

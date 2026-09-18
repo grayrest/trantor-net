@@ -20,6 +20,8 @@ HttpHost :: [].{
 	## `Io(Other(message))`, told apart only by the message text. A reset is
 	## `EndedEarly`: ureq reports one exactly as it reports an early close.
 	BodyErr : [TimedOut, EndedEarly, Io(IOErr)]
+	## `method` is basic-cli's code for a standard verb (CONNECT=0 … TRACE=9), or
+	## 10 for one given as text in `method_ext`, which is otherwise ignored.
 	Request : { method : U8, method_ext : Str, headers : List((Str, Str)), uri : Str, body : List(U8), timeout_ms : U64 }
 	Response : { status : U16, headers_flat : List(U8), body_stream : Streams.InputStream }
 	send! : Request => Try(Response, TransportErr)

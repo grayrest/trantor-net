@@ -37,7 +37,7 @@ line = stream.read_line!(1024, 5_000)?       # "hello\n" from an echo server
 
 The WASI-derived layer. `Sockets` carries TCP and UDP together, as
 `wasi:sockets` groups them, with `tcp_`/`udp_` prefixes doing the separating.
-`HttpHost` is one leaf — `send!` — shaped after
+`HttpHost` has two leaves — `send!` and `read_body!` — shaped after
 `wasi:http/outgoing-handler`.
 
 The HTTP response body is a `Streams.InputStream`, the same refcounted resource
@@ -89,7 +89,7 @@ Sockets.udp_set_read_timeout! : UdpSocket, U64 => {}                    # ms; 0 
 
 ```roc
 Request : { method : U8, method_ext : Str, headers : List((Str, Str)), uri : Str,
-            body : List(U8), timeout_ms : U64 }
+            body : List(U8), timeout_ms : U64 }   # method: CONNECT=0 … TRACE=9, or 10 for the verb in method_ext
 Response : { status : U16, headers_flat : List(U8), body_stream : Streams.InputStream }   # headers_flat is name\0value\0…
 TransportErr : [Timeout, NetworkError, BadBody, Other(List(U8))]
 BodyErr : [TimedOut, EndedEarly, Io(IOErr)]
@@ -99,7 +99,10 @@ HttpHost.read_body! : Streams.InputStream, U64 => Try(List(U8), BodyErr)   # up 
 ```
 
 `BadBody` is a malformed response; a request the client refuses to send is
-`Other` with its reason.
+`Other` with its reason. The exception is a Content-Length header that is
+repeated or not a plain decimal number: the client refuses that before sending,
+but a response can have the same fault and the error does not say whose, so it
+stays `BadBody`.
 
 ## Tcp, Udp, Http
 

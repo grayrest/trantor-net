@@ -4,8 +4,8 @@
 //! gzip/brotli decompress transparently (H2). `send!` returns status +
 //! NUL-joined multi-value headers (H10) as soon as the final headers arrive;
 //! the body is read lazily through the InputStream. Method u8 is basic-cli's
-//! InternalHttp.to_host_method encoding (CONNECT=0 … TRACE=9), `Unknown` told
-//! apart by a non-empty method_ext (H15).
+//! InternalHttp.to_host_method encoding (CONNECT=0 … TRACE=9), plus
+//! `UNKNOWN_METHOD`, whose verb is method_ext.
 use core::mem::ManuallyDrop;
 use trantor_abi as abi;
 use abi::*;
@@ -14,6 +14,10 @@ use std::time::Duration;
 use ureq::{http, Agent};
 
 const METHODS: [&str; 10] = ["CONNECT", "DELETE", "QUERY", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "TRACE"];
+/// `Unknown(ext)`'s code. It shared QUERY's, and a non-empty method_ext told
+/// them apart, so `Unknown("")` was sent as QUERY; with a code of its own an
+/// empty verb is refused like any other invalid one.
+const UNKNOWN_METHOD: u8 = 10;
 type ErrTag = BadBodyOrNetworkErrorOrOtherOrTimeoutTag;
 type Err = BadBodyOrNetworkErrorOrOtherOrTimeout;
 type Ok = AnonStructD04f4a420a7c0c28;
@@ -159,15 +163,17 @@ fn send_err(e: &ureq::Error) -> HttpHostSendResult {
 /// They are `Other`, carrying ureq's reason.
 ///
 /// Content-Length errors (`TooManyContentLengthHeaders`,
-/// `BadContentLengthHeader`) and `UnsupportedVersion` are raised on both sides,
-/// and the error does not say which; they stay `BadBody`. Anything a later
-/// ureq-proto adds does too, as the rest of `Protocol` always was.
+/// `BadContentLengthHeader`) are raised on both sides, and the error does not
+/// say which; they stay `BadBody`. Anything a later ureq-proto adds does too,
+/// as the rest of `Protocol` always was. The agent allows non-standard
+/// methods, which skips ureq-proto's check of the request's method and
+/// version: `UnsupportedVersion` then comes only from parsing the response,
+/// and `MethodVersionMismatch` is never raised.
 fn is_refused_request(e: &ureq_proto::Error) -> bool {
     use ureq_proto::Error as P;
     matches!(
         e,
-        P::MethodVersionMismatch(_, _)
-            | P::BadHeader(_)
+        P::BadHeader(_)
             | P::TooManyHostHeaders
             | P::BadHostHeader
             | P::BadAuthorizationHeader
@@ -182,10 +188,11 @@ fn is_refused_request(e: &ureq_proto::Error) -> bool {
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn trantor__http_host__send(a: HttpHostSendArgs) -> HttpHostSendResult {
     let uri = a.uri.as_str().to_string();
-    let method_str = if !a.method_ext.is_empty() {
-        a.method_ext.as_str().to_string()
+    // A code InternalHttp never sends is refused, not sent as GET.
+    let method_str = if a.method == UNKNOWN_METHOD {
+        Some(a.method_ext.as_str().to_string())
     } else {
-        METHODS.get(a.method as usize).copied().unwrap_or("GET").to_string()
+        METHODS.get(a.method as usize).map(|m| m.to_string())
     };
     let headers: Vec<(String, String)> = a.headers.as_slice().iter().map(|h| (h._0.as_str().to_string(), h._1.as_str().to_string())).collect();
     let body = a.body.as_slice().to_vec();
@@ -199,9 +206,9 @@ pub extern "C-unwind" fn trantor__http_host__send(a: HttpHostSendArgs) -> HttpHo
         return err(ErrTag::Other, "https requires the tls feature, which is disabled in this build");
     }
 
-    let method = match http::Method::from_bytes(method_str.as_bytes()) {
-        Ok(m) => m,
-        Err(_) => return err(ErrTag::Other, "invalid HTTP method"),
+    let method = match method_str.map(|m| http::Method::from_bytes(m.as_bytes())) {
+        Some(Ok(m)) => m,
+        _ => return err(ErrTag::Other, "invalid HTTP method"),
     };
     let mut builder = http::Request::builder().method(method).uri(&uri);
     for (k, v) in &headers {

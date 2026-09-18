@@ -65,6 +65,9 @@ InternalHttp :: [].{
 			.with_body(body)
 }
 
+## The host's method codes: CONNECT=0 … TRACE=9 index its `METHODS`, and
+## `Unknown` has a code of its own. It shared QUERY's, and the host told them
+## apart by a non-empty `method_ext`, so `Unknown("")` went out as QUERY.
 to_host_method : Method.Method -> U8
 to_host_method = |method|
 	match method {
@@ -78,13 +81,12 @@ to_host_method = |method|
 		CONNECT => 0
 		PATCH => 6
 		QUERY => 2
-		Unknown(_) => 2
+		Unknown(_) => 10
 	}
 
 to_host_method_ext : Method.Method -> Str
 to_host_method_ext = |method|
 	match method {
-		QUERY => "QUERY"
 		Unknown(ext) => ext
 		_ => ""
 	}
