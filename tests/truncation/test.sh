@@ -20,7 +20,9 @@
 # longer than its Content-Length or two Host headers — was reported as
 # `BadBody`, a fault in the response. `Unknown` shared QUERY's method code, so
 # `Unknown("")` went out as QUERY; the server's list of the verbs it saw shows
-# that no refused request reached it.
+# that no request refused before sending reached it. A body longer than its
+# Content-Length is refused only after the request line has gone, so that case
+# is sent to /ok rather than /verb, where it would be counted.
 source ../lib.sh
 peer badsrv.py BPORT
 make_world "$TMP/app" "$DEPS"
