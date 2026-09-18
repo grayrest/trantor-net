@@ -22,6 +22,9 @@ def serve(c):
         elif path.startswith("/tricklehead"):  # the status line and headers a byte every 300ms
             for b in b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok":
                 c.sendall(bytes([b])); time.sleep(0.3)
+        elif path.startswith("/verb"):     # the body is the verb the request line carried
+            verb = req.split(" ")[0].encode("latin1")
+            c.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n" % len(verb) + verb)
         elif path.startswith("/reset"):    # part of the body, then a RST, not a FIN
             c.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n012")
             time.sleep(0.2)

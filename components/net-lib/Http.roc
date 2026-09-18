@@ -75,7 +75,7 @@ Http :: [].{
 	## nowhere to say otherwise — so a server declaring `Content-Length: 1000`
 	## and sending 10 bytes, or a chunked stream cut before its terminator, was
 	## indistinguishable from a complete response. The host reports the
-	## truncation (H15: body-phase failures surface as `Io(IOErr)` on read);
+	## truncation (a body-phase failure surfaces on read, as a `BodyErr`);
 	## only this function was throwing it away.
 	read_body_to_end! : Response => Try(List(U8), [BodyErr(BodyErr), ..])
 	read_body_to_end! = |response| collect_stream!(response.body, [])

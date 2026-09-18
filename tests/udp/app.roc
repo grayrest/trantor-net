@@ -26,11 +26,21 @@ main! = |_args| {
 		Err(RecvErr(TimedOut)) => "TimedOut"
 		Err(_) => "other"
 	}
+	# `localhost` resolves to 127.0.0.1 first on macOS, which an IPv6 socket
+	# cannot send to: the send must take the name's IPv6 address instead
+	six = Udp.bind!("::1", 0) ? |_| BindSixFailed
+	by_name = match Udp.send_to!(six, "localhost", Udp.local_port!(six), [104, 105]) {
+		Ok(_) => match Udp.recv!(six, 1024, 2000) {
+			Ok(d) => if List.len(d.bytes) == 2 { "by-name" } else { "wrong-length" }
+			Err(_) => "lost"
+		}
+		Err(_) => "send-failed"
+	}
 	l = Sockets.tcp_listen!("127.0.0.1", 0) ? |_| ListenFailed
 	lread = match Sockets.tcp_read!(l, 8) {
 		Ok(_) => "Ok"
 		Err(Io(Unsupported)) => "Unsupported"
 		Err(_) => "other"
 	}
-	Stdout.line!("${delivered} ${waited} ${zero} ${lread}")
+	Stdout.line!("${delivered} ${waited} ${zero} ${lread} ${by_name}")
 }

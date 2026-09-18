@@ -45,6 +45,32 @@ trickled_headers! = || {
 	Ok("${result}@${if ms < 3000 { "bounded" } else { "unbounded:${Str.inspect(ms)}" }}")
 }
 
+## The verb the server saw. ureq refuses a method it does not know unless told
+## otherwise, and QUERY and `Unknown(ext)` never left the process.
+sent_verb! = |method| {
+	request = Request.from_method(method).with_uri("http://127.0.0.1:@@BPORT@@/verb")
+	match Http.send!(request) {
+		Ok(response) => match Http.read_body_to_end!(response) {
+			Ok(bytes) => Ok(Str.from_utf8(bytes) ?? "bad-utf8")
+			Err(_) => Ok("body-failed")
+		}
+		Err(HttpErr(BadBody)) => Ok("BadBody")
+		Err(_) => Ok("other")
+	}
+}
+
+## A request the client itself refuses to send is not a bad response body:
+## here, a body longer than the Content-Length the caller set.
+refused_request! = || {
+	request = Request.from_method(POST).with_uri("http://127.0.0.1:@@BPORT@@/verb").add_header("Content-Length", "1").with_body([104, 101, 108, 108, 111])
+	match Http.send!(request) {
+		Ok(_) => Ok("Ok")
+		Err(HttpErr(Other(_))) => Ok("Other")
+		Err(HttpErr(BadBody)) => Ok("BadBody")
+		Err(_) => Ok("other")
+	}
+}
+
 named : Http.BodyErr -> Str
 named = |kind| match kind {
 	TimedOut => "TimedOut"
@@ -62,5 +88,8 @@ main! = |_args| {
 	gzlie = outcome!("/gzlie")?
 	gztrunc = outcome!("/gztrunc")?
 	headers = trickled_headers!()?
-	Stdout.line!("${ok} ${lie} ${chunk} ${stall} ${reset} ${gzlie} ${gztrunc} ${headers}")
+	query = sent_verb!(QUERY)?
+	purge = sent_verb!(Unknown("PURGE"))?
+	refused = refused_request!()?
+	Stdout.line!("${ok} ${lie} ${chunk} ${stall} ${reset} ${gzlie} ${gztrunc} ${headers} ${query} ${purge} ${refused}")
 }

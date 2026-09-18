@@ -13,12 +13,18 @@
 # gzip stream truncated inside a body that arrived whole is bad data, not an
 # early end, and stays `Io`. And headers trickling in a byte at a time must
 # still time out: without a send timeout ureq renewed the deadline per byte.
+#
+# The same server echoes the verb it received: ureq refuses a method it does not
+# know unless told otherwise, so QUERY and `Unknown(ext)` were never sent, and
+# its refusal — like any request the client will not send, such as a body
+# longer than its Content-Length — was reported as `BadBody`, a fault in the
+# response.
 source ../lib.sh
 peer badsrv.py BPORT
 make_world "$TMP/app" "$DEPS"
 sed "s/@@BPORT@@/$BPORT/" app.roc > "$TMP/app.roc"
 build_app "$TMP/app" "$TMP/app.roc" trunc
 tout=$(capped 60 "$(bin "$TMP/app" trunc)" 2>&1) || { echo "FAIL: the truncation app did not run — $tout"; exit 1; }
-want="Ok(complete) EndedEarly EndedEarly TimedOut EndedEarly EndedEarly Io Timeout@bounded"
-[[ "$tout" == "$want" ]] || { echo "FAIL: body outcomes were '$tout', want '$want' (complete lie chunk stall reset gzip-cut-short gzip-truncated-in-a-whole-body headers-trickled)"; exit 1; }
-echo "ok: a complete body reads, and a lying Content-Length, a cut chunked stream, a stall and a reset are errors named for what happened"
+want="Ok(complete) EndedEarly EndedEarly TimedOut EndedEarly EndedEarly Io Timeout@bounded QUERY PURGE Other"
+[[ "$tout" == "$want" ]] || { echo "FAIL: body outcomes were '$tout', want '$want' (complete lie chunk stall reset gzip-cut-short gzip-truncated-in-a-whole-body headers-trickled query-verb unknown-verb body-over-content-length)"; exit 1; }
+echo "ok: a complete body reads, and a lying Content-Length, a cut chunked stream, a stall and a reset are errors named for what happened; QUERY and Unknown verbs go out, and a request the client refuses is Other"

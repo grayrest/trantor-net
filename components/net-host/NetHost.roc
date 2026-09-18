@@ -10,8 +10,9 @@ import InternalHttp
 ## `InternalHttp`, which lives here, so the baseline was depending backwards on
 ## the package that depends on it. Tcp/Udp/Http call this; nothing else does.
 NetHost :: [].{
-	## basic-cli's Tcp surface: the handle IS the socket resource; streams are
-	## minted per call (drop-balanced). Timeouts via tcp_set_read_timeout!.
+	## basic-cli's Tcp surface: the handle IS the socket resource, and every
+	## read and write goes through the socket's own buffer. Each call sets its
+	## timeout on the socket before it runs.
 	TcpStream : Sockets.TcpSocket
 	## Errors cross STRUCTURED. These used to return `Try(_, Str)` built from
 	## `IOErr.to_str`, and Tcp.roc parsed the string back into tags — a contract

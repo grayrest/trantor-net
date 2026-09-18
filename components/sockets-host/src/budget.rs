@@ -261,6 +261,39 @@ pub fn accept(listener: &TcpListener, timeout: Duration) -> io::Result<TcpStream
     }
 }
 
+/// Connects to the first address `resolve` returns that answers, all of them
+/// sharing one `timeout`.
+///
+/// `TcpStream::connect` has no timeout, and the old code applied the budget to
+/// the socket afterwards as its READ timeout — so the connect itself was
+/// unbounded. Measured against a listener with a full accept queue: a 500ms
+/// budget returned `TimedOut` after 8.05s, and only because the OS gave up.
+///
+/// The timeout starts once `resolve` returns (D-S2-57): the lookup cannot be
+/// bounded or cancelled, so a slow resolver adds its own time rather than
+/// spending the connect's (a 1ms budget against a name that does not exist
+/// returned after 26ms). The deadline used to be taken before the lookup,
+/// against what `Sockets.tcp_connect!` and `Tcp.connect!` document. The lookup
+/// is passed in so that order lives here, where a test can give it a slow one.
+///
+/// A zero timeout is rejected by the caller (NetHost) before it reaches here.
+pub fn connect(resolve: impl FnOnce() -> io::Result<Vec<SocketAddr>>, timeout: Duration) -> io::Result<TcpStream> {
+    let addrs = resolve()?;
+    let deadline = Instant::now() + timeout;
+    let mut last = io::Error::new(ErrorKind::AddrNotAvailable, "no address for host");
+    for addr in addrs {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(io::Error::new(ErrorKind::TimedOut, "connect timed out"));
+        }
+        match TcpStream::connect_timeout(&addr, left) {
+            Ok(stream) => return Ok(stream),
+            Err(e) => last = e,
+        }
+    }
+    Err(last)
+}
+
 /// `UdpSocket::send_to`, with the EINTR retry every other call has. A UDP
 /// socket has no write timeout, so there is no deadline, only the retry.
 pub fn send_to(sock: &mut UdpSocket, bytes: &[u8], to: SocketAddr) -> io::Result<usize> {

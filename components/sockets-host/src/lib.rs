@@ -14,8 +14,8 @@ use conn::Conn;
 use core::mem::ManuallyDrop;
 use trantor_abi as abi;
 use abi::*;
-use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs, UdpSocket};
-use std::time::{Duration, Instant};
+use std::net::{SocketAddr, TcpListener, ToSocketAddrs, UdpSocket};
+use std::time::Duration;
 
 pub enum Sock { Stream(Conn), Listener(TcpListener), Udp(UdpSocket) }
 
@@ -101,39 +101,10 @@ pub extern "C-unwind" fn trantor__sockets_host__resolve(name: RocStr) -> Sockets
         Err(e) => SocketsResolveResult { payload: SocketsResolveResultPayload { err: ManuallyDrop::new(neterr(&e)) }, tag: SocketsResolveResultTag::Err },
     }
 }
-/// Connect within `ms`, across every address the name resolves to.
-///
-/// Not across the lookup itself: `to_socket_addrs` runs first and cannot be
-/// bounded or cancelled, so a slow resolver adds its own time to the budget.
-/// A 1ms budget against a name that does not exist returned after 26ms.
-///
-/// `TcpStream::connect` has no timeout, and the old code applied `ms` to the
-/// socket afterwards as its READ timeout — so the connect itself was unbounded.
-/// Measured against a listener with a full accept queue: a 500ms budget
-/// returned `TimedOut` after 8.05s, and only because the OS gave up first.
-///
-/// A zero budget is rejected by the caller (NetHost) before it reaches here.
-fn connect_within(host: &str, port: u16, ms: u64) -> std::io::Result<TcpStream> {
-    let deadline = Instant::now() + Duration::from_millis(ms);
-    let addrs: Vec<SocketAddr> = (host, port).to_socket_addrs()?.collect();
-    let mut last = std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "no address for host");
-    for a in addrs {
-        let left = deadline.saturating_duration_since(Instant::now());
-        if left.is_zero() {
-            return Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "connect timed out"));
-        }
-        match TcpStream::connect_timeout(&a, left) {
-            Ok(c) => return Ok(c),
-            Err(e) => last = e,
-        }
-    }
-    Err(last)
-}
-
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn trantor__sockets_host__tcp_connect(host: RocStr, port: u16, ms: u64) -> SocketsTcpConnectResult {
     let h = take_str(host);
-    sock_result!(SocketsTcpConnectResult, SocketsTcpConnectResultPayload, SocketsTcpConnectResultTag, connect_within(h.as_str(), port, ms).map(|c| Sock::Stream(Conn::new(c))))
+    sock_result!(SocketsTcpConnectResult, SocketsTcpConnectResultPayload, SocketsTcpConnectResultTag, budget::connect(|| Ok((h.as_str(), port).to_socket_addrs()?.collect()), Duration::from_millis(ms)).map(|c| Sock::Stream(Conn::new(c))))
 }
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn trantor__sockets_host__tcp_listen(host: RocStr, port: u16) -> SocketsTcpListenResult {
@@ -235,12 +206,24 @@ pub extern "C-unwind" fn trantor__sockets_host__udp_bind(host: RocStr, port: u16
     let h = take_str(host);
     sock_result!(SocketsUdpBindResult, SocketsUdpBindResultPayload, SocketsUdpBindResultTag, UdpSocket::bind((h.as_str(), port)).map(Sock::Udp))
 }
+/// Which of a name's addresses a datagram goes to: the first of the socket's
+/// own family. It was simply the first, and `localhost` resolves to 127.0.0.1
+/// before ::1 on macOS, so a socket bound to ::1 could not send to it by name.
+/// With none of that family it is the first after all, and the send's own
+/// error says why that cannot work.
+fn destination(addrs: &[SocketAddr], local: SocketAddr) -> std::io::Result<SocketAddr> {
+    addrs.iter().find(|a| a.is_ipv6() == local.is_ipv6()).or_else(|| addrs.first()).copied()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "no address for host"))
+}
 #[unsafe(no_mangle)]
 pub extern "C-unwind" fn trantor__sockets_host__udp_send_to(s: *mut u64, host: RocStr, port: u16, bytes: RocListWith<u8, false>) -> SocketsUdpSendToResult {
     let h = take_str(host); let b = bytes.as_slice().to_vec(); unsafe { bytes.decref(abi::host()) };
     // The lookup happens before the send, outside any budget, as for connect.
-    let to = (h.as_str(), port).to_socket_addrs().and_then(|mut addrs| addrs.next().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "no address for host")));
-    let r = to.and_then(|to| unsafe { abi::resource::with(s as RocBox, |x: &mut Sock| match x { Sock::Udp(u) => budget::send_to(u, &b, to), _ => Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "not udp")) }) });
+    let addrs = (h.as_str(), port).to_socket_addrs().map(Iterator::collect::<Vec<_>>);
+    let r = addrs.and_then(|addrs| unsafe { abi::resource::with(s as RocBox, |x: &mut Sock| match x {
+        Sock::Udp(u) => destination(&addrs, u.local_addr()?).and_then(|to| budget::send_to(u, &b, to)),
+        _ => Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "not udp")),
+    }) });
     match r { Ok(n) => SocketsUdpSendToResult { payload: SocketsUdpSendToResultPayload { ok: ManuallyDrop::new(n as u64) }, tag: SocketsUdpSendToResultTag::Ok }, Err(e) => SocketsUdpSendToResult { payload: SocketsUdpSendToResultPayload { err: ManuallyDrop::new(neterr(&e)) }, tag: SocketsUdpSendToResultTag::Err } }
 }
 #[unsafe(no_mangle)]

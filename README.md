@@ -42,8 +42,11 @@ The WASI-derived layer. `Sockets` carries TCP and UDP together, as
 
 The HTTP response body is a `Streams.InputStream`, the same refcounted resource
 files, sockets and stdin produce: `send!` returns once the final headers
-arrive, and body-phase failures surface as `Io(IOErr)` on read rather than as a
-send error.
+arrive, and body-phase failures surface on read rather than as a send error.
+`read_body!` names them as a `BodyErr`: `TimedOut` when the body stalls past the
+request's timeout, `EndedEarly` when the connection closes or is reset before
+the body ends, and `Io(IOErr)` for anything else, corrupt compressed data
+among it. Reading the same stream with `Streams.read!` still gives `IOErr`.
 
 ### Sockets
 
@@ -60,7 +63,7 @@ NetErr : [ConnectionRefused, ConnectionReset, TimedOut, AddrInUse, AddrNotAvaila
 Sockets.resolve! : Str => Try(List(IpAddress), NetErr)
 
 # tcp: connecting
-Sockets.tcp_connect! : Str, U16, U64 => Try(TcpSocket, NetErr)          # timeout ms, across DNS and every address
+Sockets.tcp_connect! : Str, U16, U64 => Try(TcpSocket, NetErr)          # timeout ms, across every address; starts after the name lookup
 Sockets.tcp_listen! : Str, U16 => Try(TcpSocket, NetErr)                # port 0 picks a free port
 Sockets.tcp_accept! : TcpSocket, U64 => Try(TcpSocket, NetErr)          # timeout ms; TimedOut when it passes
 Sockets.tcp_local_port! : TcpSocket => U16
@@ -68,6 +71,8 @@ Sockets.tcp_local_port! : TcpSocket => U16
 # tcp: reading and writing
 Sockets.tcp_read! : TcpSocket, U64 => Try(List(U8), NetErr)             # up to max; empty is end of stream
 Sockets.tcp_read_until! : TcpSocket, U8, U64 => Try(List(U8), NetErr)   # through the delimiter, at most max
+Sockets.tcp_read_exactly! : TcpSocket, U64 => Try(List(U8), NetErr)     # exactly n, or fewer at end of stream
+Sockets.tcp_unread! : TcpSocket, List(U8) => {}                         # put bytes back in front of the next read
 Sockets.tcp_write! : TcpSocket, List(U8) => Try({}, NetErr)
 Sockets.tcp_set_read_timeout! : TcpSocket, U64 => {}                    # ms; 0 is no timeout
 Sockets.tcp_set_write_timeout! : TcpSocket, U64 => {}                   # ms; 0 is no timeout
@@ -87,9 +92,14 @@ Request : { method : U8, method_ext : Str, headers : List((Str, Str)), uri : Str
             body : List(U8), timeout_ms : U64 }
 Response : { status : U16, headers_flat : List(U8), body_stream : Streams.InputStream }   # headers_flat is name\0value\0…
 TransportErr : [Timeout, NetworkError, BadBody, Other(List(U8))]
+BodyErr : [TimedOut, EndedEarly, Io(IOErr)]
 
 HttpHost.send! : Request => Try(Response, TransportErr)
+HttpHost.read_body! : Streams.InputStream, U64 => Try(List(U8), BodyErr)   # up to max; empty is the end
 ```
+
+`BadBody` is a malformed response; a request the client refuses to send is
+`Other` with its reason.
 
 ## Tcp, Udp, Http
 
@@ -163,9 +173,16 @@ Udp.recv! : Socket, U64, U64 => Try({ bytes : List(U8), from_host : Str, from_po
 `Request` and `Header` are `roc-lang/http`'s; `Url` is the baseline's. `send!`
 needs an absolute `http` or `https` URL, and drops the fragment before sending.
 
+A body that cannot be read to its end is `BodyErr(Http.BodyErr)`: `TimedOut`
+when it stalls past the request's timeout, `EndedEarly` when the connection
+closes or is reset first (a `Content-Length` not reached, a chunked stream cut
+short), and `Io(IOErr)` for any other failure, corrupt compressed data among
+them.
+
 ```roc
 Response : { status : U16, headers : List(Header.Header), body : Streams.InputStream }
 TransportErr : InternalHttp.TransportErr
+BodyErr : [TimedOut, EndedEarly, Io(IOErr)]
 InternalHttp.TransportErr : [Timeout, NetworkError, BadBody, Other(List(U8))]
 InternalHttp.HttpResponse : Response.Response           # roc-lang/http's eager Response
 
@@ -175,13 +192,13 @@ Http.send_json! : Request, _ => Try(Response, [JsonErr(_), InvalidUrl(Url.ParseE
 Http.with_json_body : Request, _ => Try(Request, [JsonErr(_), ..])                              # sets Content-Type
 
 # reading the body
-Http.read_body_to_end! : Response => Try(List(U8), [BodyErr(IOErr), ..])                        # a cut-off body is BodyErr
-Http.to_http_response! : Response => Try(InternalHttp.HttpResponse, [BodyErr(IOErr), ..])
-Http.decode_json_response! : Response => Try(_, [BadBody(Str), BodyErr(IOErr), JsonErr(_), ..])
+Http.read_body_to_end! : Response => Try(List(U8), [BodyErr(BodyErr), ..])                     # a cut-off body is BodyErr
+Http.to_http_response! : Response => Try(InternalHttp.HttpResponse, [BodyErr(BodyErr), ..])
+Http.decode_json_response! : Response => Try(_, [BadBody(Str), BodyErr(BodyErr), JsonErr(_), ..])
 
 # GET
-Http.get_utf8! : Url.Url => Try(Str, [BadBody(Str), BodyErr(IOErr), InvalidUrl(Url.ParseErr), HttpErr(TransportErr), ..])
-Http.get! : Url.Url => Try(_, [BadBody(Str), BodyErr(IOErr), InvalidUrl(Url.ParseErr), HttpErr(TransportErr), JsonErr(_), ..])   # decodes JSON
+Http.get_utf8! : Url.Url => Try(Str, [BadBody(Str), BodyErr(BodyErr), InvalidUrl(Url.ParseErr), HttpErr(TransportErr), ..])
+Http.get! : Url.Url => Try(_, [BadBody(Str), BodyErr(BodyErr), InvalidUrl(Url.ParseErr), HttpErr(TransportErr), JsonErr(_), ..])   # decodes JSON
 ```
 
 ## TempTest

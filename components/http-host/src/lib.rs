@@ -32,8 +32,12 @@ fn agent() -> &'static Agent {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(10);
+        // Without allow_non_standard_methods ureq refuses, before sending, any
+        // method outside HTTP/1.1's list, so `QUERY` and `Unknown(ext)` — which
+        // InternalHttp passes through as text for exactly this — never left.
         let builder = Agent::config_builder()
             .http_status_as_error(false)
+            .allow_non_standard_methods(true)
             .max_redirects(max_redirects)
             .max_redirects_will_error(false);
         #[cfg(feature = "tls")]
@@ -133,8 +137,8 @@ fn without_sigpipe<T>(call: impl FnOnce() -> T) -> T {
 }
 
 /// Map a ureq transport error onto the 4-variant twin (H3). `send!` only reports
-/// connect/header-phase failures; body-phase failures surface as StreamErr on a
-/// later read (H15), so decompression/truncation are not mapped here.
+/// connect/header-phase failures; body-phase failures surface as BodyErr on a
+/// later read (D-S2-52), so decompression/truncation are not mapped here.
 fn send_err(e: &ureq::Error) -> HttpHostSendResult {
     use ureq::Error as E;
     match e {
@@ -142,9 +146,37 @@ fn send_err(e: &ureq::Error) -> HttpHostSendResult {
         E::Io(_) | E::HostNotFound | E::ConnectionFailed | E::Tls(_) | E::ConnectProxyFailed(_) | E::TlsRequired | E::RequireHttpsOnly(_) => {
             err(ErrTag::NetworkError, "")
         }
+        E::Protocol(p) if is_refused_request(p) => err(ErrTag::Other, &e.to_string()),
         E::Protocol(_) | E::BodyExceedsLimit(_) | E::LargeResponseHeader(_, _) => err(ErrTag::BadBody, ""),
         other => err(ErrTag::Other, &other.to_string()),
     }
+}
+
+/// Whether ureq refused the request it was handed rather than failing to read
+/// the response. These all went to `BadBody`, which H3 keeps for a malformed
+/// response, so a request ureq would not send — a body longer than the
+/// caller's Content-Length, say — read as the server's fault, with no message.
+/// They are `Other`, carrying ureq's reason.
+///
+/// Content-Length errors (`TooManyContentLengthHeaders`,
+/// `BadContentLengthHeader`) and `UnsupportedVersion` are raised on both sides,
+/// and the error does not say which; they stay `BadBody`. Anything a later
+/// ureq-proto adds does too, as the rest of `Protocol` always was.
+fn is_refused_request(e: &ureq_proto::Error) -> bool {
+    use ureq_proto::Error as P;
+    matches!(
+        e,
+        P::MethodVersionMismatch(_, _)
+            | P::BadHeader(_)
+            | P::TooManyHostHeaders
+            | P::BadHostHeader
+            | P::BadAuthorizationHeader
+            | P::OutputOverflow
+            | P::BodyNotAllowed
+            | P::BodyContentAfterFinish
+            | P::BodyLargerThanContentLength
+            | P::BodyIsChunked
+    )
 }
 
 #[unsafe(no_mangle)]

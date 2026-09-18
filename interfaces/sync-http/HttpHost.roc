@@ -8,8 +8,9 @@
 ## incoming-response -> incoming-body -> input-stream), the same refcounted
 ## resource files/sockets/stdin produce. `send!` returns as soon as the final
 ## headers arrive; the caller reads the body stream (or collects it). Body-phase
-## failures (reset, truncation, decompression) surface as Io(IOErr) on read, not
-## as a send! error (H15).
+## failures surface on read, not as a send! error (H15): `read_body!` names them
+## as a `BodyErr` (D-S2-52), where `Streams.read!` on the same stream can only
+## say `IOErr`.
 import IOErr exposing [IOErr]
 import Streams
 HttpHost :: [].{
