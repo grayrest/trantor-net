@@ -149,7 +149,7 @@ NetHost :: [].{
 ## Rebuild a `Sockets.NetErr` into an open union. This compiler will not widen
 ## a closed alias into a superset on its own, so every widen in this tree is
 ## spelled out — see stdio-lib's `widen_stdout_err` for the same shape.
-widen_net : Try(a, Sockets.NetErr) -> Try(a, [ConnectionRefused, ConnectionReset, TimedOut, AddrInUse, AddrNotAvailable, Io(IOErr), ..])
+widen_net : Try(a, Sockets.NetErr) -> Try(a, [ConnectionRefused, ConnectionReset, TimedOut, AddrInUse, AddrNotAvailable, Io(IOErr)])
 widen_net = |r|
 	match r {
 		Ok(v) => Ok(v)

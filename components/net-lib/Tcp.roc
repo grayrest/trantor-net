@@ -29,7 +29,7 @@ Tcp :: [].{
 		## Read up to a number of bytes, waiting at most `timeout_ms` milliseconds.
 		## An empty list is the end of the stream, so a `bytes_to_read` of 0 reads
 		## nothing and cannot be told from it: ask for at least one byte.
-		read_up_to! : Stream, U64, U64 => Try(List(U8), [TcpReadErr(StreamErr), ..])
+		read_up_to! : Stream, U64, U64 => Try(List(U8), [TcpReadErr(StreamErr)])
 		read_up_to! = |stream, bytes_to_read, timeout_ms|
 			NetHost.tcp_read_up_to!(stream.host, bytes_to_read, timeout_ms)
 				.map_err(|err| TcpReadErr(stream_err(err)))
@@ -39,7 +39,7 @@ Tcp :: [].{
 		## `TcpUnexpectedEOF` is returned if the stream ends before the specified
 		## number of bytes is reached; the bytes that did arrive are still there
 		## for the next read.
-		read_exactly! : Stream, U64, U64 => Try(List(U8), [TcpUnexpectedEOF, TcpReadErr(StreamErr), ..])
+		read_exactly! : Stream, U64, U64 => Try(List(U8), [TcpUnexpectedEOF, TcpReadErr(StreamErr)])
 		read_exactly! = |stream, bytes_to_read, timeout_ms|
 			match NetHost.tcp_read_exactly!(stream.host, bytes_to_read, timeout_ms) {
 				Ok(bytes) => Ok(bytes)
@@ -58,7 +58,7 @@ Tcp :: [].{
 		## `TcpReadLimitExceeded(max_bytes)` if the delimiter was not found within
 		## the limit; those `max_bytes` bytes are consumed, as in basic-cli, so a
 		## loop that skips over-long lines moves on.
-		read_until! : Stream, U8, U64, U64 => Try(List(U8), [TcpReadLimitExceeded(U64), TcpReadErr(StreamErr), ..])
+		read_until! : Stream, U8, U64, U64 => Try(List(U8), [TcpReadLimitExceeded(U64), TcpReadErr(StreamErr)])
 		read_until! = |stream, byte, max_bytes, timeout_ms|
 			match NetHost.tcp_read_until!(stream.host, byte, max_bytes, timeout_ms) {
 				Ok(bytes) => Ok(bytes)
@@ -76,7 +76,7 @@ Tcp :: [].{
 		## is included as the last character. A line that is not valid UTF-8 is
 		## `TcpReadBadUtf8`, and its bytes are consumed: use `read_until!` to keep
 		## them.
-		read_line! : Stream, U64, U64 => Try(Str, [TcpReadBadUtf8(_), TcpReadLimitExceeded(U64), TcpReadErr(StreamErr), ..])
+		read_line! : Stream, U64, U64 => Try(Str, [TcpReadBadUtf8(_), TcpReadLimitExceeded(U64), TcpReadErr(StreamErr)])
 		read_line! = |stream, max_bytes, timeout_ms|
 			match read_until!(stream, 10, max_bytes, timeout_ms) {
 				Ok(bytes) => Str.from_utf8(bytes).map_err(|err| TcpReadBadUtf8(err))
@@ -86,13 +86,13 @@ Tcp :: [].{
 		## Write bytes, waiting at most `timeout_ms` milliseconds. A write that
 		## times out may have sent part of `bytes`, and says nothing of how much:
 		## treat the stream as unusable after one.
-		write! : Stream, List(U8), U64 => Try({}, [TcpWriteErr(StreamErr), ..])
+		write! : Stream, List(U8), U64 => Try({}, [TcpWriteErr(StreamErr)])
 		write! = |stream, bytes, timeout_ms|
 			NetHost.tcp_write!(stream.host, bytes, timeout_ms)
 				.map_err(|err| TcpWriteErr(stream_err(err)))
 
 		## Write a string as UTF-8, waiting at most `timeout_ms` milliseconds.
-		write_utf8! : Stream, Str, U64 => Try({}, [TcpWriteErr(StreamErr), ..])
+		write_utf8! : Stream, Str, U64 => Try({}, [TcpWriteErr(StreamErr)])
 		write_utf8! = |stream, str, timeout_ms|
 			write!(stream, Str.to_utf8(str), timeout_ms)
 	}
@@ -112,7 +112,7 @@ Tcp :: [].{
 		## writes takes its own timeout. A server that wants to wait indefinitely
 		## calls this in a loop and carries on after `TimedOut`, which is also
 		## where it checks whether to shut down.
-		accept! : Listener, U64 => Try(Stream, [TimedOut, PermissionDenied, OutOfMemory, Unrecognized(Str), ..])
+		accept! : Listener, U64 => Try(Stream, [TimedOut, PermissionDenied, OutOfMemory, Unrecognized(Str)])
 		accept! = |listener, timeout_ms|
 			NetHost.tcp_accept!(listener.host, timeout_ms)
 				.map_ok(|stream| Stream.{ host: stream })
@@ -160,7 +160,7 @@ Tcp :: [].{
 	## ```
 	##
 	## Valid hostnames look like `127.0.0.1`, `::1`, `localhost`, or `roc-lang.org`.
-	connect! : Str, U16, U64 => Try(Stream, [PermissionDenied, AddrInUse, AddrNotAvailable, ConnectionRefused, Interrupted, TimedOut, Unsupported, Unrecognized(Str), ..])
+	connect! : Str, U16, U64 => Try(Stream, [PermissionDenied, AddrInUse, AddrNotAvailable, ConnectionRefused, Interrupted, TimedOut, Unsupported, Unrecognized(Str)])
 	connect! = |host, port, timeout_ms|
 		NetHost.tcp_connect!(host, port, timeout_ms)
 			.map_ok(|stream| Stream.{ host: stream })
@@ -173,7 +173,7 @@ Tcp :: [].{
 	## listener = Tcp.listen!("127.0.0.1", 8080)?
 	## stream = listener.accept!(5_000)?
 	## ```
-	listen! : Str, U16 => Try(Listener, [AddrInUse, AddrNotAvailable, PermissionDenied, Unrecognized(Str), ..])
+	listen! : Str, U16 => Try(Listener, [AddrInUse, AddrNotAvailable, PermissionDenied, Unrecognized(Str)])
 	listen! = |host, port|
 		NetHost.tcp_listen!(host, port)
 			.map_ok(|listener| Listener.{ host: listener })

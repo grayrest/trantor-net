@@ -131,22 +131,22 @@ StreamErr : [StreamNotFound, PermissionDenied, ConnectionRefused, ConnectionRese
              TimedOut, OutOfMemory, BrokenPipe, Unrecognized(Str)]
 
 # connecting
-Tcp.connect! : Str, U16, U64 => Try(Stream, [PermissionDenied, AddrInUse, AddrNotAvailable, ConnectionRefused, Interrupted, TimedOut, Unsupported, Unrecognized(Str), ..])
+Tcp.connect! : Str, U16, U64 => Try(Stream, [PermissionDenied, AddrInUse, AddrNotAvailable, ConnectionRefused, Interrupted, TimedOut, Unsupported, Unrecognized(Str)])
 
 # listening
-Tcp.listen! : Str, U16 => Try(Listener, [AddrInUse, AddrNotAvailable, PermissionDenied, Unrecognized(Str), ..])   # port 0 picks a free port
-accept! : Listener, U64 => Try(Stream, [TimedOut, PermissionDenied, OutOfMemory, Unrecognized(Str), ..])
+Tcp.listen! : Str, U16 => Try(Listener, [AddrInUse, AddrNotAvailable, PermissionDenied, Unrecognized(Str)])   # port 0 picks a free port
+accept! : Listener, U64 => Try(Stream, [TimedOut, PermissionDenied, OutOfMemory, Unrecognized(Str)])
 port! : Listener => U16
 
 # reading: the last argument is the timeout
-read_up_to! : Stream, U64, U64 => Try(List(U8), [TcpReadErr(StreamErr), ..])
-read_exactly! : Stream, U64, U64 => Try(List(U8), [TcpUnexpectedEOF, TcpReadErr(StreamErr), ..])
-read_until! : Stream, U8, U64, U64 => Try(List(U8), [TcpReadLimitExceeded(U64), TcpReadErr(StreamErr), ..])   # delimiter included
-read_line! : Stream, U64, U64 => Try(Str, [TcpReadBadUtf8(_), TcpReadLimitExceeded(U64), TcpReadErr(StreamErr), ..])   # "\n" included
+read_up_to! : Stream, U64, U64 => Try(List(U8), [TcpReadErr(StreamErr)])
+read_exactly! : Stream, U64, U64 => Try(List(U8), [TcpUnexpectedEOF, TcpReadErr(StreamErr)])
+read_until! : Stream, U8, U64, U64 => Try(List(U8), [TcpReadLimitExceeded(U64), TcpReadErr(StreamErr)])   # delimiter included
+read_line! : Stream, U64, U64 => Try(Str, [TcpReadBadUtf8(_), TcpReadLimitExceeded(U64), TcpReadErr(StreamErr)])   # "\n" included
 
 # writing
-write! : Stream, List(U8), U64 => Try({}, [TcpWriteErr(StreamErr), ..])
-write_utf8! : Stream, Str, U64 => Try({}, [TcpWriteErr(StreamErr), ..])
+write! : Stream, List(U8), U64 => Try({}, [TcpWriteErr(StreamErr)])
+write_utf8! : Stream, Str, U64 => Try({}, [TcpWriteErr(StreamErr)])
 
 # rendering
 to_inspect : Stream -> Str                              # "Tcp.Stream(<opaque>)"
@@ -165,10 +165,10 @@ unions their matches cover.
 ```roc
 Socket : Sockets.UdpSocket
 
-Udp.bind! : Str, U16 => Try(Socket, [BindErr(Sockets.NetErr), ..])
+Udp.bind! : Str, U16 => Try(Socket, [BindErr(Sockets.NetErr)])
 Udp.local_port! : Socket => U16
-Udp.send_to! : Socket, Str, U16, List(U8) => Try(U64, [SendErr(Sockets.NetErr), ..])
-Udp.recv! : Socket, U64, U64 => Try({ bytes : List(U8), from_host : Str, from_port : U16 }, [RecvErr(Sockets.NetErr), ..])   # max bytes, timeout ms; 0 fails at once
+Udp.send_to! : Socket, Str, U16, List(U8) => Try(U64, [SendErr(Sockets.NetErr)])
+Udp.recv! : Socket, U64, U64 => Try({ bytes : List(U8), from_host : Str, from_port : U16 }, [RecvErr(Sockets.NetErr)])   # max bytes, timeout ms; 0 fails at once
 ```
 
 ### Http
@@ -190,18 +190,18 @@ InternalHttp.TransportErr : [Timeout, NetworkError, BadBody, Other(List(U8))]
 InternalHttp.HttpResponse : Response.Response           # roc-lang/http's eager Response
 
 # sending
-Http.send! : Request => Try(Response, [InvalidUrl(Url.ParseErr), HttpErr(TransportErr), ..])   # returns at the headers
-Http.send_json! : Request, _ => Try(Response, [JsonErr(_), InvalidUrl(Url.ParseErr), HttpErr(TransportErr), ..])
-Http.with_json_body : Request, _ => Try(Request, [JsonErr(_), ..])                              # sets Content-Type
+Http.send! : Request => Try(Response, [InvalidUrl(Url.ParseErr), HttpErr(TransportErr)])   # returns at the headers
+Http.send_json! : Request, _ => Try(Response, [JsonErr(_), InvalidUrl(Url.ParseErr), HttpErr(TransportErr)])
+Http.with_json_body : Request, _ => Try(Request, [JsonErr(_)])                              # sets Content-Type
 
 # reading the body
-Http.read_body_to_end! : Response => Try(List(U8), [BodyErr(BodyErr), ..])                     # a cut-off body is BodyErr
-Http.to_http_response! : Response => Try(InternalHttp.HttpResponse, [BodyErr(BodyErr), ..])
-Http.decode_json_response! : Response => Try(_, [BadBody(Str), BodyErr(BodyErr), JsonErr(_), ..])
+Http.read_body_to_end! : Response => Try(List(U8), [BodyErr(BodyErr)])                     # a cut-off body is BodyErr
+Http.to_http_response! : Response => Try(InternalHttp.HttpResponse, [BodyErr(BodyErr)])
+Http.decode_json_response! : Response => Try(_, [BadBody(Str), BodyErr(BodyErr), JsonErr(_)])
 
 # GET
-Http.get_utf8! : Url.Url => Try(Str, [BadBody(Str), BodyErr(BodyErr), InvalidUrl(Url.ParseErr), HttpErr(TransportErr), ..])
-Http.get! : Url.Url => Try(_, [BadBody(Str), BodyErr(BodyErr), InvalidUrl(Url.ParseErr), HttpErr(TransportErr), JsonErr(_), ..])   # decodes JSON
+Http.get_utf8! : Url.Url => Try(Str, [BadBody(Str), BodyErr(BodyErr), InvalidUrl(Url.ParseErr), HttpErr(TransportErr)])
+Http.get! : Url.Url => Try(_, [BadBody(Str), BodyErr(BodyErr), InvalidUrl(Url.ParseErr), HttpErr(TransportErr), JsonErr(_)])   # decodes JSON
 ```
 
 ## TempTest

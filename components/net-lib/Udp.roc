@@ -12,11 +12,11 @@ import Sockets
 ## precedent to hold its shape fixed.
 Udp :: [].{
 	Socket : Sockets.UdpSocket
-	bind! : Str, U16 => Try(Socket, [BindErr(Sockets.NetErr), ..])
+	bind! : Str, U16 => Try(Socket, [BindErr(Sockets.NetErr)])
 	bind! = |host, port| Sockets.udp_bind!(host, port).map_err(|e| BindErr(e))
 	local_port! : Socket => U16
 	local_port! = |s| Sockets.udp_local_port!(s)
-	send_to! : Socket, Str, U16, List(U8) => Try(U64, [SendErr(Sockets.NetErr), ..])
+	send_to! : Socket, Str, U16, List(U8) => Try(U64, [SendErr(Sockets.NetErr)])
 	send_to! = |s, host, port, bytes| Sockets.udp_send_to!(s, host, port, bytes).map_err(|e| SendErr(e))
 	## Waits at most `timeout_ms` for a datagram. A zero budget fails
 	## immediately, as everywhere else in this package.
@@ -25,7 +25,7 @@ Udp :: [].{
 	## arrived, which for a protocol with no delivery guarantee could be never.
 	## A datagram longer than `max` is cut to `max` bytes, and nothing says so:
 	## ask for the largest datagram the protocol can send.
-	recv! : Socket, U64, U64 => Try({ bytes : List(U8), from_host : Str, from_port : U16 }, [RecvErr(Sockets.NetErr), ..])
+	recv! : Socket, U64, U64 => Try({ bytes : List(U8), from_host : Str, from_port : U16 }, [RecvErr(Sockets.NetErr)])
 	recv! = |s, max, timeout_ms|
 		if timeout_ms == 0 {
 			Err(RecvErr(TimedOut))
