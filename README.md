@@ -216,6 +216,24 @@ TempTest.interrupt_after! : U64, Bool => {}     # SIGUSR1 after ms; the Bool ins
 TempTest.take_interrupts! : {} => U64           # deliveries since the last call; resets the count
 ```
 
+## Proxies
+
+`HttpHost`, and the `Http` shim over it, honour a proxy named in the
+environment. The client is ureq, whose default configuration reads the first of
+these that is set:
+
+```
+ALL_PROXY  all_proxy  HTTPS_PROXY  https_proxy  HTTP_PROXY  http_proxy
+```
+
+The one it finds is used for **every** request, whatever the scheme. Setting
+only `HTTPS_PROXY` therefore routes plaintext `http://` requests through that
+proxy too — curl, which picks a proxy per scheme, does not do this. `NO_PROXY`
+is read as well and is the only way to exempt a host.
+
+Sockets do not: `Sockets`, `Tcp` and `Udp` never consult the environment and
+always connect to the address they are given.
+
 ## Known limitations
 
 On Linux, suspending a program with Ctrl-Z and resuming it with `fg` while an
