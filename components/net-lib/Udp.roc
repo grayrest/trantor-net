@@ -1,4 +1,4 @@
-import IOErr exposing [IOErr]
+import IOErr
 import Sockets
 ## Udp: thin blocking sugar over roc:sync-sockets/udp (no basic-cli precedent).
 ##

@@ -11,7 +11,7 @@
 ## failures surface on read, not as a send! error (H15): `read_body!` names them
 ## as a `BodyErr` (D-S2-52), where `Streams.read!` on the same stream can only
 ## say `IOErr`.
-import IOErr exposing [IOErr]
+import IOErr
 import Streams
 HttpHost :: [].{
 	TransportErr : [Timeout, NetworkError, BadBody, Other(List(U8))]

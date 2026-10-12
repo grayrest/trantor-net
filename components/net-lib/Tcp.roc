@@ -1,4 +1,4 @@
-import IOErr exposing [IOErr]
+import IOErr
 import NetHost
 
 ## Connect to TCP servers, accept connections, and exchange buffered byte

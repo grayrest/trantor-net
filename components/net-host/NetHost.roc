@@ -1,4 +1,4 @@
-import IOErr exposing [IOErr]
+import IOErr
 import Streams
 import Sockets
 import HttpHost

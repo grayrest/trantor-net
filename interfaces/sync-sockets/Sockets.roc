@@ -1,4 +1,4 @@
-import IOErr exposing [IOErr]
+import IOErr
 ## roc:sync-sockets: WASI's socket surface in blocking form (P6/P7/P12).
 ## Sockets are resources (P5); reads go through the socket's own buffer and
 ## writes through a sync-io stream. Addresses are host:port pairs (name lookup
